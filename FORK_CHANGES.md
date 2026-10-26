@@ -74,7 +74,8 @@
 - `isNewsletter`·`spamScore`·`isSpam`·`spamSuspected` 제거 — 내용 기반 판단이라 Claude 가 직접 하는 편이 정확함 (기존 `isNewsletter` 는 mailparser 가 `List-*` 헤더를 `headers.get("list")` 로 옮기는 탓에 항상 false 였음)
 - `auth`: 같은 이름의 헤더를 모두 읽고 `ARC-Authentication-Results`·`Received-SPF`(다음) 도 사용. 수신 서버(naver.com·daum.net)가 단 헤더만 신뢰. "인증헤더없음" / "인증헤더 해석실패" 구분
 - `replyToDiffers`: 고객지원 서비스(zendesk 등) 화이트리스트가 결과를 false 로 덮어쓰던 것을 분리 → `replyToKnownService` 필드. 도메인 비교는 `tldts`(Public Suffix List)
-- 재현 테스트: `tests/analyze.test.js` (`npm test`, 가짜 픽스처)
+- 프롬프트 인젝션 방어: read_email 전 헤더 필드 필터, 호출마다 바뀌는 무작위 경계로 본문·snippet 래핑(본문 속 가짜 경계 제거), 응답에 boundary·notice. HTML 숨김 요소(display:none 등)는 내용까지 제거
+- 재현 테스트: `tests/analyze.test.js`·`tests/sanitize.test.js`·`tests/html.test.js` (`npm test`, 가짜 픽스처)
 
 ## 원본에서 그대로 유지한 부분
 

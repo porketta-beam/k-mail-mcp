@@ -53,10 +53,21 @@ export function toImapDate(d) {
 }
 
 // HTML 메일을 읽을 수 있는 텍스트로 변환 (주석·스타일·스크립트·태그 제거)
-function htmlToText(html) {
-  return String(html || "")
+// 화면에 숨긴 요소의 "내용까지" 제거 — 사람은 못 보고 Claude 만 읽는 지시문 차단
+// ponytail: 정규식이라 같은 태그가 중첩되면 완벽하지 않음. HTML 파서가 필요하면 그때 도입.
+const HIDDEN_ELEMENT =
+  /<(\w+)\b[^>]*?(?:display\s*:\s*none|visibility\s*:\s*hidden|opacity\s*:\s*0|font-size\s*:\s*0|(?:max-)?height\s*:\s*0|\shidden(?=[\s=>]))[^>]*>[\s\S]*?<\/\1>/gi;
+export function htmlToText(html) {
+  let s = String(html || "")
     .replace(/<!--[\s\S]*?-->/g, " ")
-    .replace(/<(style|script|head)[^>]*>[\s\S]*?<\/\1>/gi, " ")
+    .replace(/<(style|script|head)[^>]*>[\s\S]*?<\/\1>/gi, " ");
+  // 중첩되어 안쪽부터 드러나는 숨김 요소까지 몇 번 반복해 제거
+  for (let i = 0; i < 3; i++) {
+    const next = s.replace(HIDDEN_ELEMENT, " ");
+    if (next === s) break;
+    s = next;
+  }
+  return s
     .replace(/<br\s*\/?>|<\/(p|div|tr|li|h\d)>/gi, "\n")
     .replace(/<[^>]+>/g, " ")
     .replace(/&nbsp;/gi, " ").replace(/&amp;/gi, "&").replace(/&lt;/gi, "<")
