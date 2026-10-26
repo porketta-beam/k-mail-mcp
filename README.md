@@ -81,7 +81,8 @@ cd k-mail-mcp
 |---|---|---|
 | `KMAIL_TLS_INSECURE` | (없음) | `1` 이면 TLS 인증서 검증을 끕니다. 회사 프록시 등으로 접속이 안 될 때만 사용하세요. |
 
-`categories.json` 을 수정하면 카테고리 분류 키워드를 바꿀 수 있습니다.
+스팸 패턴·제외 폴더 등 나머지 설정은 `app/config.js`, Claude 에게 보이는 도구 설명은 `app/prompts.js` 에 있습니다.
+테스트: `npm test`
 
 ## 라이선스
 

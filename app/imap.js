@@ -86,7 +86,7 @@ export function fetchMessages(imap, uids) {
           const m    = await simpleParser(item.raw);
           const text = toPlainText(m);
           results.push({
-            uid: item.attrs.uid, m,
+            uid: item.attrs.uid, m, text,
             flags: item.attrs.flags || [],
             snippet: text.replace(/\s+/g, " ").trim().substring(0, 400),
             messageId: (m.messageId || "").replace(/[<>]/g, "").trim(),

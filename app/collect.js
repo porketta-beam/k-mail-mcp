@@ -1,13 +1,13 @@
 // 한 계정의 최근 메일 수집
-import { PRESETS, SPAM_THRESHOLD } from "./config.js";
+import { PRESETS } from "./config.js";
 import { sanitize } from "./sanitize.js";
 import { makeImap, imapConnect, openBox, searchUids, isNonExistentError, toImapDate, fetchMessages } from "./imap.js";
 import { syncMailboxes, removeFromDiscovered } from "./mailboxes.js";
-import { loadCategoryRules, classifyEmail, parseAuthResults, spamScore, senderDomain, replyToDiffers } from "./analyze.js";
+import { analyzeMail } from "./analyze.js";
 
 export async function collectRecentMails(account, { since, includeRead, maxPerFolder }) {
   const result = { account: account.label, service: account.service, scannedMailboxes: [], mails: [], error: null };
-  const rules  = loadCategoryRules();
+  const preset = PRESETS[account.service];
   const imap   = makeImap(account);
   try {
     await imapConnect(imap);
@@ -36,40 +36,25 @@ export async function collectRecentMails(account, { since, includeRead, maxPerFo
       try { items = await fetchMessages(imap, uids); }
       catch (e) { console.error(`[skip fetch] ${account.label}/${mailbox}: ${e.message}`); continue; }
 
-      for (const { uid, m, flags, snippet, messageId } of items) {
+      for (const { uid, m, text, flags, snippet, messageId } of items) {
         const date = m.date ? new Date(m.date) : null;
         if (date && date < since) continue;
         if (messageId) { if (seen.has(messageId)) continue; seen.add(messageId); }
-
-        const from         = m.from?.text || "";
-        const subject      = m.subject || "(제목 없음)";
-        const isNewsletter = !!m.headers?.get("list-unsubscribe");
-        const auth         = parseAuthResults(m);
-        const domain       = senderDomain(from);
-        const replyTo      = m.replyTo?.value?.[0]?.address || "";
-        const replyDomain  = replyTo.split("@")[1]?.toLowerCase() || "";
-        const score        = spamScore(from, subject, snippet, auth);
 
         result.mails.push({
           account: account.label,
           mailbox, uid,
           date: date?.toISOString() || "",
-          from: sanitize(from),
+          from: sanitize(m.from?.text || ""),
           to: sanitize(m.to?.text || ""),
           cc: sanitize(m.cc?.text || ""),
-          subject: sanitize(subject),
+          subject: sanitize(m.subject || "(제목 없음)"),
           snippet: sanitize(snippet),
           isRead: flags.includes("\\Seen"),
           isFlagged: flags.includes("\\Flagged"),
           hasAttachments: (m.attachments || []).length > 0,
-          category: classifyEmail(rules, from, subject, isNewsletter),
-          isNewsletter,
-          spamScore: score,
-          isSpam: score >= SPAM_THRESHOLD,
-          auth: [auth.spf && `SPF:${auth.spf}`, auth.dkim && `DKIM:${auth.dkim}`, auth.dmarc && `DMARC:${auth.dmarc}`].filter(Boolean).join(" | ") || "인증정보없음",
-          replyTo,
-          replyToDiffers: replyToDiffers(replyDomain, domain),
-          webLink: PRESETS[account.service].web,
+          ...analyzeMail(m, { text, snippet, trustedAuthDomains: preset.authDomains }),
+          webLink: preset.web,
         });
       }
     }
