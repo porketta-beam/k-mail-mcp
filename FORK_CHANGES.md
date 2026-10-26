@@ -71,7 +71,7 @@
 
 - 코드 구조: 루트 `index.js` 는 MCP 도구 등록만 하고 나머지는 `app/` 로 분리 (설정 `app/config.js`, 프롬프트 `app/prompts.js`). 실행 경로는 그대로라 재설치 불필요
 - 키워드 카테고리 분류(`category`, `categories.json`) 제거 — 오분류가 잦았고, 분류는 Claude 가 from·subject·snippet·mailbox 로 직접 하는 편이 정확함
-- `isNewsletter`: mailparser 가 `List-*` 헤더를 `headers.get("list")` 로 옮기는데 `"list-unsubscribe"` 로 읽어 항상 false 였음. 본문 "수신거부" 도 신호로 사용
+- `isNewsletter`·`spamScore`·`isSpam`·`spamSuspected` 제거 — 내용 기반 판단이라 Claude 가 직접 하는 편이 정확함 (기존 `isNewsletter` 는 mailparser 가 `List-*` 헤더를 `headers.get("list")` 로 옮기는 탓에 항상 false 였음)
 - `auth`: 같은 이름의 헤더를 모두 읽고 `ARC-Authentication-Results`·`Received-SPF`(다음) 도 사용. 수신 서버(naver.com·daum.net)가 단 헤더만 신뢰. "인증헤더없음" / "인증헤더 해석실패" 구분
 - `replyToDiffers`: 고객지원 서비스(zendesk 등) 화이트리스트가 결과를 false 로 덮어쓰던 것을 분리 → `replyToKnownService` 필드. 도메인 비교는 `tldts`(Public Suffix List)
 - 재현 테스트: `tests/analyze.test.js` (`npm test`, 가짜 픽스처)
@@ -80,7 +80,6 @@
 
 - 계정 정보 AES-256-GCM 암호화 저장 방식과 파일 형식 (`accounts.enc.json`, `.master.key`) — 원본에서 등록한 계정 파일도 그대로 읽힘 (네이버/다음 계정만 사용)
 - 감시 폴더 자동 탐색·제외 관리 (`watched_mailboxes.json`, `list_mailboxes` / `get_watched_mailboxes` / `set_watched_mailboxes`)
-- 로컬 스팸 패턴·SPF/DKIM/DMARC 헤더 점수
 - 의존성: `@modelcontextprotocol/sdk`, `imap`, `mailparser`, `zod` (+ 포크에서 `tldts` 추가 — 등록 도메인 비교용)
 
 ## 검증

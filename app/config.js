@@ -42,18 +42,8 @@ export const DEFAULT_EXCLUDED_FOLDERS = [
 ];
 
 // ══════════════════════════════════════════════════════
-// 스팸 / 인증 신호
+// Reply-To 신호
 // ══════════════════════════════════════════════════════
-export const SPAM_PATTERNS = [
-  { re:/당첨|무료\s*증정|사은품|경품\s*당첨/i, score:40 },
-  { re:/대출|신용\s*대출|급전|당일\s*대출/i,   score:50 },
-  { re:/\byou(\s+have)?\s+won\b|\bclaim\s+(your\s+)?prize\b|\bfree\s+gift\b/i, score:45 },
-  { re:/계정.*정지|계정.*차단|비밀번호.*재설정.*요청/i, score:55 },
-  { re:/account.*suspended.*verify|password.*reset.*required/i, score:55 },
-  { re:/카드.*정보.*유출|개인정보.*유출.*확인/i, score:60 },
-];
-export const SPAM_THRESHOLD = 70;
-
 // 고객지원/마케팅 답장 서비스 — Reply-To 가 달라도 흔한 정상 패턴이라 replyToKnownService 로 따로 표시
 export const KNOWN_REPLY_SERVICES = ["zendesk.com", "freshdesk.com", "intercom-mail.com", "helpscout.net", "hubspot.com", "salesforce.com"];
 

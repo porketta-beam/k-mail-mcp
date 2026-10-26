@@ -1,7 +1,8 @@
 // 메일 1통의 헤더 기반 신호 (네트워크 호출 없음)
-// 분류는 하지 않습니다 — from·subject·snippet·mailbox 를 보고 Claude 가 판단합니다.
+// Claude 는 헤더를 볼 수 없으므로 헤더에서만 알 수 있는 것(인증 결과, Reply-To 도메인)만 계산합니다.
+// 분류·스팸·뉴스레터 판단은 from·subject·snippet·mailbox 를 보고 Claude 가 합니다.
 import { getDomain } from "tldts";
-import { SPAM_PATTERNS, SPAM_THRESHOLD, KNOWN_REPLY_SERVICES } from "./config.js";
+import { KNOWN_REPLY_SERVICES } from "./config.js";
 
 const RESULTS = "pass|fail|softfail|none|neutral|temperror|permerror|policy";
 const AUTH_HEADERS = ["authentication-results", "arc-authentication-results", "received-spf"];
@@ -37,38 +38,15 @@ export function parseAuth(m, trustedDomains) {
   return { ...auth, text: text || (found ? "인증헤더 해석실패" : "인증헤더없음") };
 }
 
-export function spamScore(from, subject, snippet, auth) {
-  let s = 0;
-  const text = `${from} ${subject} ${snippet}`;
-  for (const { re, score } of SPAM_PATTERNS) if (re.test(text)) s += score;
-  if (auth.spf === "fail") s += 35; else if (auth.spf === "softfail") s += 15;
-  if (auth.dkim === "fail") s += 30;
-  if (auth.dmarc === "fail") s += 25;
-  return Math.min(s, 100);
-}
-
 const regDomain = addr => getDomain(addr.split("@")[1] || "") || "";
 
-// mailparser 는 List-* 헤더를 headers.get("list") 로 옮겨 담습니다 ("list-unsubscribe" 로는 안 나옴)
-export function isNewsletter(m, text) {
-  const list = m.headers?.get("list");
-  return !!(list?.unsubscribe || list?.id) || /수신\s*거부|unsubscribe/i.test(text || "");
-}
-
-export function analyzeMail(m, { text = "", snippet = "", trustedAuthDomains = [] } = {}) {
-  const from      = m.from?.text || "";
-  const subject   = m.subject || "";
-  const auth      = parseAuth(m, trustedAuthDomains);
-  const score     = spamScore(from, subject, snippet, auth);
+export function analyzeMail(m, { trustedAuthDomains = [] } = {}) {
   const replyTo   = m.replyTo?.value?.[0]?.address || "";
   const fromDom   = regDomain(m.from?.value?.[0]?.address || "");
   const replyDom  = regDomain(replyTo);
   const differs   = !!(fromDom && replyDom && fromDom !== replyDom);
   return {
-    isNewsletter: isNewsletter(m, text),
-    spamScore: score,
-    isSpam: score >= SPAM_THRESHOLD,
-    auth: auth.text,
+    auth: parseAuth(m, trustedAuthDomains).text,
     replyTo,
     replyToDiffers: differs,
     replyToKnownService: differs && KNOWN_REPLY_SERVICES.includes(replyDom) ? replyDom : null,

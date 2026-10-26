@@ -36,7 +36,7 @@ export async function collectRecentMails(account, { since, includeRead, maxPerFo
       try { items = await fetchMessages(imap, uids); }
       catch (e) { console.error(`[skip fetch] ${account.label}/${mailbox}: ${e.message}`); continue; }
 
-      for (const { uid, m, text, flags, snippet, messageId } of items) {
+      for (const { uid, m, flags, snippet, messageId } of items) {
         const date = m.date ? new Date(m.date) : null;
         if (date && date < since) continue;
         if (messageId) { if (seen.has(messageId)) continue; seen.add(messageId); }
@@ -53,7 +53,7 @@ export async function collectRecentMails(account, { since, includeRead, maxPerFo
           isRead: flags.includes("\\Seen"),
           isFlagged: flags.includes("\\Flagged"),
           hasAttachments: (m.attachments || []).length > 0,
-          ...analyzeMail(m, { text, snippet, trustedAuthDomains: preset.authDomains }),
+          ...analyzeMail(m, { trustedAuthDomains: preset.authDomains }),
           webLink: preset.web,
         });
       }

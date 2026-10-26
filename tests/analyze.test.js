@@ -9,7 +9,7 @@ const DAUM  = ["daum.net"];
 
 async function mail(headers, body = "본문") {
   const m = await simpleParser([...headers, "Subject: test", "", body].join("\r\n"));
-  return (opts = {}) => analyzeMail(m, { text: body, snippet: body, ...opts });
+  return (opts = {}) => analyzeMail(m, opts);
 }
 
 // ── auth ─────────────────────────────────────────────
@@ -61,15 +61,6 @@ test("발신자가 끼워 넣은 다른 서버의 Authentication-Results 는 무
   assert.equal(r.auth, "인증헤더없음");
 });
 
-test("SPF fail 은 스팸 점수에 반영된다", async () => {
-  const r = (await mail([
-    "From: a@example.com",
-    "Authentication-Results: mx.naver.com; spf=fail; dkim=fail; dmarc=fail",
-  ]))({ trustedAuthDomains: NAVER });
-  assert.equal(r.spamScore, 90);
-  assert.equal(r.isSpam, true);
-});
-
 // ── replyToDiffers ───────────────────────────────────
 test("등록 도메인이 다르면 replyToDiffers=true, 고객지원 서비스는 따로 표시", async () => {
   const r = (await mail([
@@ -110,20 +101,3 @@ test("표시 이름 속 @ 에 속지 않는다", async () => {
   assert.equal(r.replyToDiffers, false);
 });
 
-// ── isNewsletter ─────────────────────────────────────
-test("List-Unsubscribe 헤더가 있으면 isNewsletter=true", async () => {
-  const r = (await mail([
-    "From: hello@news.vpn-example.com",
-    "List-Unsubscribe: <https://unsub.example.com/x>",
-  ]))();
-  assert.equal(r.isNewsletter, true);
-});
-
-test("본문에 '수신거부' 가 있으면 isNewsletter=true", async () => {
-  const r = (await mail(["From: mail@loan.example.kr"], "광고 안내 ... 수신을 원하지 않으시면 [수신거부]"))();
-  assert.equal(r.isNewsletter, true);
-});
-
-test("일반 메일은 isNewsletter=false", async () => {
-  assert.equal((await mail(["From: friend@example.com"], "안녕하세요"))().isNewsletter, false);
-});
