@@ -16,12 +16,14 @@
   },
   "scripts": {
     "start": "node index.js",
-    "check": "node --check index.js && node --check setup-worker.js"
+    "check": "node -e \"for (const f of ['index.js', 'setup-worker.js', ...require('fs').readdirSync('app').map(f => 'app/' + f)]) require('child_process').execFileSync(process.execPath, ['--check', f], { stdio: 'inherit' })\"",
+    "test": "node --test \"tests/*.test.js\""
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
     "imap": "^0.8.19",
     "mailparser": "^3.7.1",
+    "tldts": "^7.4.19",
     "zod": "^3.0.0"
   },
   "overrides": {
