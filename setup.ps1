@@ -1,4 +1,4 @@
-﻿﻿# K-Mail-MCP (Naver/Daum fork) - 계정 설정
+﻿# K-Mail-MCP (Naver/Daum fork) - 계정 설정
 # 원본: K-Mail-MCP by youngsooco (MIT) - https://github.com/youngsooco/k-mail-mcp
 # 포크 변경: 네이버/다음/카카오만 지원, AI 스팸 필터(API 키) 메뉴 제거
 [Console]::InputEncoding  = [System.Text.Encoding]::UTF8
