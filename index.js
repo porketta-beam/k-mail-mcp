@@ -7,7 +7,8 @@
  *
  * 하는 일: 네이버 / 다음(한메일) / 카카오메일 계정을 IMAP 으로 "읽기 전용" 접속해
  *          최근 N시간(기본 24시간) 메일을 모아 Claude 에게 넘겨줍니다.
- * 하지 않는 일: 메일 발송, 삭제, 읽음 처리, 외부 API 호출, 원격(HTTP) 접속.
+ * 하지 않는 일: 메일 발송, 삭제, 외부 API 호출, 원격(HTTP) 접속.
+ *              (읽음/안읽음 처리는 mark_read/mark_unread 도구를 명시적으로 호출할 때만 — 유일한 쓰기 동작)
  *
  * 실행 방식: stdio 전용 (Claude 데스크톱 앱이 로컬 프로세스로 실행)
  * 구조: 이 파일은 MCP 도구 등록만 담당하고, 나머지는 app/ 모듈에 있습니다.
@@ -22,13 +23,13 @@ import { TOOL_DESCRIPTIONS as T, PARAM_DESCRIPTIONS as P, wrapEmailContent, wrap
 import { sanitize, stripBoundaryMarkers, makeBoundary } from "./app/sanitize.js";
 import { loadAccounts, findAccount } from "./app/accounts.js";
 import { loadWatchedMailboxes, saveWatchedMailboxes } from "./app/mailboxes.js";
-import { makeImap, imapConnect, openBox, listBoxes, fetchMessages, toPlainText } from "./app/imap.js";
+import { makeImap, imapConnect, openBox, listBoxes, fetchMessages, toPlainText, addFlags, delFlags } from "./app/imap.js";
 import { collectRecentMails } from "./app/collect.js";
 
 const json = (obj) => ({ content: [{ type: "text", text: JSON.stringify(obj, null, 2) }] });
 
 // ══════════════════════════════════════════════════════
-// MCP 서버 (도구 6개, 모두 읽기 전용)
+// MCP 서버 (도구 8개 — mark_read/mark_unread 만 쓰기, 나머지는 읽기 전용)
 // ══════════════════════════════════════════════════════
 const server = new McpServer({ name: "k-mail-mcp", version: VERSION });
 
@@ -124,6 +125,50 @@ server.tool("read_email", T.read_email,
         totalChars: full.length,
         webLink: PRESETS[acc.service].web,
       });
+    } catch (e) {
+      return json({ error: e.message });
+    } finally { try { imap.end(); } catch {} }
+  }
+);
+
+server.tool("mark_read", T.mark_read,
+  {
+    account_label: z.string(),
+    uid:           z.union([z.number(), z.array(z.number())]).describe("읽음 처리할 메일 uid. 숫자 하나 또는 배열"),
+    mailbox:       z.string().default("INBOX"),
+  },
+  async ({ account_label, uid, mailbox }) => {
+    const acc = findAccount(account_label);
+    if (!acc) return json({ error: "계정 없음" });
+    const uids = Array.isArray(uid) ? uid : [uid];
+    const imap = makeImap(acc);
+    try {
+      await imapConnect(imap);
+      await openBox(imap, mailbox, false); // 쓰기 모드로 열어야 \Seen 플래그를 붙일 수 있음
+      await addFlags(imap, uids, "\\Seen");
+      return json({ account: acc.label, mailbox, markedRead: uids });
+    } catch (e) {
+      return json({ error: e.message });
+    } finally { try { imap.end(); } catch {} }
+  }
+);
+
+server.tool("mark_unread", T.mark_unread,
+  {
+    account_label: z.string(),
+    uid:           z.union([z.number(), z.array(z.number())]).describe("안읽음 처리할 메일 uid. 숫자 하나 또는 배열"),
+    mailbox:       z.string().default("INBOX"),
+  },
+  async ({ account_label, uid, mailbox }) => {
+    const acc = findAccount(account_label);
+    if (!acc) return json({ error: "계정 없음" });
+    const uids = Array.isArray(uid) ? uid : [uid];
+    const imap = makeImap(acc);
+    try {
+      await imapConnect(imap);
+      await openBox(imap, mailbox, false); // 쓰기 모드로 열어야 \Seen 플래그를 뗄 수 있음
+      await delFlags(imap, uids, "\\Seen");
+      return json({ account: acc.label, mailbox, markedUnread: uids });
     } catch (e) {
       return json({ error: e.message });
     } finally { try { imap.end(); } catch {} }

@@ -19,9 +19,17 @@ export function imapConnect(imap) {
     imap.once("ready", onReady); imap.once("error", onErr); imap.connect();
   });
 }
-// 두 번째 인자 true = 읽기 전용(EXAMINE). 메일이 읽음 처리되지 않습니다.
-export function openBox(imap, name) {
-  return new Promise((res, rej) => imap.openBox(name, true, (e, b) => e ? rej(e) : res(b)));
+// readOnly=true 는 EXAMINE(읽기 전용) — 메일이 읽음 처리되지 않습니다.
+// readOnly=false 는 SELECT(쓰기) — \Seen 같은 플래그를 바꾸려면 필요합니다. mark_read 전용.
+export function openBox(imap, name, readOnly = true) {
+  return new Promise((res, rej) => imap.openBox(name, readOnly, (e, b) => e ? rej(e) : res(b)));
+}
+// UID 기준 플래그 추가/삭제 (mark_read/mark_unread 가 "\\Seen" 을 붙이거나 뗄 때). 쓰기 모드에서만 동작.
+export function addFlags(imap, uids, flags) {
+  return new Promise((res, rej) => imap.addFlags(uids, flags, (e) => e ? rej(e) : res()));
+}
+export function delFlags(imap, uids, flags) {
+  return new Promise((res, rej) => imap.delFlags(uids, flags, (e) => e ? rej(e) : res()));
 }
 export function listBoxes(imap) {
   // 하위 폴더까지 "상위/하위" 형태로 펼침
