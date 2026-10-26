@@ -25,3 +25,6 @@
 *.ico       binary
 *.zip       binary
 *.gz        binary
+
+# PowerShell 스크립트 — Windows 전용, CRLF 유지
+*.ps1       text eol=crlf

@@ -1,10 +1,8 @@
+# 개인 정보 / 런타임 파일 — 절대 커밋하지 마세요
 .master.key
-.instance.json
 accounts.enc.json
-last_run.json
+accounts.enc.json.tmp
+watched_mailboxes.json
+watched_mailboxes.json.tmp
 .env
 node_modules/
-MAO_AGENT_QUERY.md
-
-settings.enc.json
-watched_mailboxes.json
