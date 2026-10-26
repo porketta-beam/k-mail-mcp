@@ -235,6 +235,21 @@ function toImapDate(d) {
   return `${d.getDate()}-${M[d.getMonth()]}-${d.getFullYear()}`;
 }
 
+// HTML 메일을 읽을 수 있는 텍스트로 변환 (주석·스타일·스크립트·태그 제거)
+function htmlToText(html) {
+  return String(html || "")
+    .replace(/<!--[\s\S]*?-->/g, " ")
+    .replace(/<(style|script|head)[^>]*>[\s\S]*?<\/\1>/gi, " ")
+    .replace(/<br\s*\/?>|<\/(p|div|tr|li|h\d)>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ").replace(/&amp;/gi, "&").replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">").replace(/&quot;/gi, '"').replace(/&#39;/g, "'");
+}
+function toPlainText(m) {
+  const t = m.text && !/<!--|<\/?(table|td|div|a)\b/i.test(m.text) ? m.text : "";
+  return t || htmlToText(m.html || m.text || "");
+}
+
 function fetchMessages(imap, uids) {
   return new Promise((res, rej) => {
     if (!uids.length) { res([]); return; }
@@ -252,7 +267,7 @@ function fetchMessages(imap, uids) {
       for (const item of bag) {
         try {
           const m    = await simpleParser(item.raw);
-          const text = m.text || (m.html ? m.html.replace(/<[^>]{0,500}>/g, " ") : "");
+          const text = toPlainText(m);
           results.push({
             uid: item.attrs.uid, m,
             flags: item.attrs.flags || [],
@@ -298,7 +313,7 @@ function classifyEmail(rules, from, subject, isNewsletter) {
 const SPAM_PATTERNS = [
   { re:/당첨|무료\s*증정|사은품|경품\s*당첨/i, score:40 },
   { re:/대출|신용\s*대출|급전|당일\s*대출/i,   score:50 },
-  { re:/you.*won|claim.*prize|free.*gift/i,     score:45 },
+  { re:/\byou(\s+have)?\s+won\b|\bclaim\s+(your\s+)?prize\b|\bfree\s+gift\b/i, score:45 },
   { re:/계정.*정지|계정.*차단|비밀번호.*재설정.*요청/i, score:55 },
   { re:/account.*suspended.*verify|password.*reset.*required/i, score:55 },
   { re:/카드.*정보.*유출|개인정보.*유출.*확인/i, score:60 },
@@ -322,6 +337,16 @@ function spamScore(from, subject, snippet, auth) {
 function senderDomain(from) {
   return (from.match(/@([\w.-]+)/)?.[1] || "").toLowerCase();
 }
+// 기본 도메인 추출: reply.github.com -> github.com, mail.co.kr 같은 2단계 국가 도메인 고려
+function baseDomain(d) {
+  const parts = String(d || "").toLowerCase().split(".").filter(Boolean);
+  if (parts.length <= 2) return parts.join(".");
+  const sld = parts[parts.length - 2];
+  const twoLevel = parts[parts.length - 1].length === 2 && /^(co|or|ne|go|ac|re|pe|com|net|org|gov|edu)$/.test(sld);
+  return parts.slice(twoLevel ? -3 : -2).join(".");
+}
+// 메일 발송 대행/고객지원 서비스 (Reply-To 가 달라도 흔한 정상 패턴)
+const TRUSTED_REPLY_HOSTS = ["zendesk.com", "freshdesk.com", "intercom-mail.com", "helpscout.net", "hubspot.com", "salesforce.com"];
 
 // ══════════════════════════════════════════════════════
 // 한 계정의 최근 메일 수집
@@ -389,7 +414,8 @@ async function collectRecentMails(account, { since, includeRead, maxPerFolder })
           isSpam: score >= 70,
           auth: [auth.spf && `SPF:${auth.spf}`, auth.dkim && `DKIM:${auth.dkim}`, auth.dmarc && `DMARC:${auth.dmarc}`].filter(Boolean).join(" | ") || "인증정보없음",
           replyTo,
-          replyToDiffers: !!(replyDomain && domain && replyDomain !== domain),
+          replyToDiffers: !!(replyDomain && domain && baseDomain(replyDomain) !== baseDomain(domain)
+                              && !TRUSTED_REPLY_HOSTS.includes(baseDomain(replyDomain))),
           webLink: PRESETS[account.service].web,
         });
       }
@@ -490,7 +516,7 @@ server.tool("read_email",
       const [item] = await fetchMessages(imap, [uid]);
       if (!item) return json({ error: "메일을 찾을 수 없습니다", mailbox, uid });
       const m = item.m;
-      const full = m.text || (m.html || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim() || "(본문 없음)";
+      const full = toPlainText(m).replace(/[ \t]+/g, " ").replace(/\n\s*\n+/g, "\n\n").trim() || "(본문 없음)";
       const body = (max_chars === -1 || full.length <= max_chars)
         ? full : full.substring(0, max_chars) + `\n\n...[이하 ${full.length - max_chars}자 생략 — max_chars=-1 로 전체 보기]`;
       return json({
