@@ -18,8 +18,8 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { VERSION, PRESETS, TLS_INSECURE, DEFAULT_EXCLUDED_FOLDERS } from "./app/config.js";
-import { TOOL_DESCRIPTIONS as T, PARAM_DESCRIPTIONS as P, wrapEmailContent } from "./app/prompts.js";
-import { sanitize } from "./app/sanitize.js";
+import { TOOL_DESCRIPTIONS as T, PARAM_DESCRIPTIONS as P, wrapEmailContent, wrapInline, boundaryNotice } from "./app/prompts.js";
+import { sanitize, stripBoundaryMarkers, makeBoundary } from "./app/sanitize.js";
 import { loadAccounts, findAccount } from "./app/accounts.js";
 import { loadWatchedMailboxes, saveWatchedMailboxes } from "./app/mailboxes.js";
 import { makeImap, imapConnect, openBox, listBoxes, fetchMessages, toPlainText } from "./app/imap.js";
@@ -71,8 +71,14 @@ server.tool("check_new_mails", T.check_new_mails,
     const errors = results.filter(r => r.error).map(r => ({ account: r.account, error: r.error }));
     const folderChanges = results.filter(r => r.folderChanges).map(r => ({ account: r.account, ...r.folderChanges }));
 
+    // 외부에서 온 자유 텍스트(snippet)를 호출마다 바뀌는 경계로 감쌉니다.
+    const boundary = makeBoundary();
+    for (const m of mails) m.snippet = wrapInline(stripBoundaryMarkers(m.snippet), boundary);
+
     return json({
       range: { since: since.toISOString(), until: now.toISOString(), hours },
+      boundary,
+      notice: boundaryNotice(boundary),
       totalMails: mails.length,
       unreadMails: mails.filter(m => !m.isRead).length,
       byAccount: Object.fromEntries(results.map(r => [r.account, r.mails.length])),
@@ -101,15 +107,20 @@ server.tool("read_email", T.read_email,
       if (!item) return json({ error: "메일을 찾을 수 없습니다", mailbox, uid });
       const m = item.m;
       const full = toPlainText(m).replace(/[ \t]+/g, " ").replace(/\n\s*\n+/g, "\n\n").trim() || "(본문 없음)";
-      const body = (max_chars === -1 || full.length <= max_chars)
+      const clipped = (max_chars === -1 || full.length <= max_chars)
         ? full : full.substring(0, max_chars) + `\n\n...[이하 ${full.length - max_chars}자 생략 — max_chars=-1 로 전체 보기]`;
+      // 헤더 필드도 외부 입력이므로 모두 필터. 본문은 가짜 경계 제거 → 필터 → 무작위 경계로 래핑.
+      const boundary = makeBoundary();
+      const body = wrapEmailContent(sanitize(stripBoundaryMarkers(clipped)), boundary);
       return json({
         account: acc.label, mailbox, uid,
-        from: m.from?.text || "", to: m.to?.text || "", cc: m.cc?.text || "",
-        replyTo: m.replyTo?.text || "",
-        subject: m.subject || "", date: m.date?.toISOString() || "",
-        attachments: (m.attachments || []).map(a => ({ filename: a.filename, size: a.size, contentType: a.contentType })),
-        body: wrapEmailContent(sanitize(body)),
+        from: sanitize(m.from?.text || ""), to: sanitize(m.to?.text || ""), cc: sanitize(m.cc?.text || ""),
+        replyTo: sanitize(m.replyTo?.text || ""),
+        subject: sanitize(m.subject || ""), date: m.date?.toISOString() || "",
+        attachments: (m.attachments || []).map(a => ({ filename: sanitize(a.filename || ""), size: a.size, contentType: a.contentType })),
+        boundary,
+        notice: boundaryNotice(boundary),
+        body,
         totalChars: full.length,
         webLink: PRESETS[acc.service].web,
       });
